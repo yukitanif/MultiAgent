@@ -17,12 +17,12 @@ def task_generate():
     while start==end: end=random.choice(gentask)
     return (start,end)
 
-def update_tables():
+def update():
     for i in range(1,11):
-        for j in range(1,11):
-            Table2[i][j]=Table[i][j]
-            Table_nex[i][j]=Table[i][j]
-    for agent in Agents: Table2[agent.loc[0]][agent.loc[1]]=agent.id+10
+        for j in range(1,11): Table2[i][j],Table_nex[i][j]=Table[i][j],Table[i][j]
+    for agent in Agents:
+        agent.pushed,agent.wait,agent.pushing=False,False,None
+        Table2[agent.loc[0]][agent.loc[1]]=agent.id+10
 
 class Agent:
     ID=0
@@ -33,7 +33,7 @@ class Agent:
         self.target=None
         self.task=None
         self.state="fetch"
-        self.nex=None #次に行きたいとこ
+        self.nex=None
         self.priority=0
         self.pushing=None
         self.pushed=False
@@ -73,43 +73,29 @@ class Agent:
         self.priority=self.id #tentative
 
     def decide(self):
+        M=0
         if self.pushed:
-            M=0
             for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]):
                 if Table_nex[pos[0]][pos[1]]<10 and self.pushing.loc!=pos:
                     if val>M: M,self.nex=val,pos
             if M==0:
-                self.wait=True
-                self.nex=self.loc
+                self.wait,self.nex=True,self.loc
                 agent=self
                 while agent.pushed:
                     agent=agent.pushing
                     Table_nex[agent.nex[0]][agent.nex[1]]=Table[agent.nex[0]][agent.nex[1]]
-                    agent.wait=True
-                    agent.nex=agent.loc
+                    agent.wait,agent.nex=True,agent.loc
                     Table_nex[agent.loc[0]][agent.loc[1]]=agent.id+10
-            elif Table2[self.nex[0]][self.nex[1]]>=10:
-                agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
-                if agent.priority>=self.priority: return
-                agent.pushing=self
-                agent.pushed=True
-                agent.priority=self.priority
-                ids.remove(agent.id)
-                ids.insert(0,agent.id)
         else:
-            M=0
             for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]):
                 if Table_nex[pos[0]][pos[1]]<10:
                     if val>M: M,self.nex=val,pos #later
-            if M==0:
-                self.wait=True
-                self.nex=self.loc
-            elif Table2[self.nex[0]][self.nex[1]]>=10:
-                agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
-                if agent.priority>=self.priority: return
-                agent.pushing=self
-                agent.pushed=True
-                agent.priority=self.priority
+            if M==0: self.wait,self.nex=True,self.loc
+        
+        if (not self.wait) and Table2[self.nex[0]][self.nex[1]]>=10:
+            agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
+            if agent.priority<self.priority:
+                agent.pushing,agent.pushed,agent.priority=self,True,self.priority
                 ids.remove(agent.id)
                 ids.insert(0,agent.id)
 
@@ -120,10 +106,6 @@ class Agent:
         if self.loc==self.target:
             if self.state=="fetch": self.target,self.state=self.task[1],"deliver"
             else: self.select_task()
-        #reset
-        self.pushed=False
-        self.wait=False
-        self.pushing=None
 
 ##learn q_table###
 connection,q_table={},{}
@@ -145,10 +127,9 @@ Agents=[Agent(loc) for loc in random.sample(gentask,Agent_Num)]
 Tasks=[task_generate() for _ in range(Task_Num)]
 Table2=copy.deepcopy(Table)
 Table_nex=copy.deepcopy(Table)
-ids=[i for i in range(Agent_Num)]
 for agent in Agents: agent.select_task()
 for step in range(Step):
-    update_tables()
+    update()
     ids=[i for i in range(Agent_Num)]
     for agent in Agents: agent.prior()
     ids.sort(key=lambda x:Agents[x].priority,reverse=True)
