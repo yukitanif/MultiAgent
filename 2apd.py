@@ -93,6 +93,7 @@ class Agent:
                     break
             if self.nex==self.loc: self.wait=True
         
+        #priority inheritance
         if (not self.wait) and Table2[self.nex[0]][self.nex[1]]>=10:
             agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
             if agent.priority<self.priority:
@@ -123,7 +124,6 @@ learn_agent.select_task_random()
 for _ in range(1000000):
     learn_agent.learn()
     e*=0.998
-
 for pos in gentask:
     dic=q_table[pos]
     for key,val in dic.items(): dic[key]=sorted(val.items(),key=lambda x:x[1],reverse=True)
