@@ -2,15 +2,12 @@ import random
 import copy
 
 Agent_Num,Task_Num=7,15
-Step=50
-e,a,r,gamma=0.998,0.1,70,0.9
+Step=5000
 Table=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,2,1,1,1,0],[0,1,0,2,0,1,0,0,1,0,1,0],[0,2,0,1,0,1,0,0,1,0,1,0],
        [0,1,0,1,1,2,1,1,1,1,1,0],[0,1,1,1,0,0,0,1,0,0,2,0],[0,1,0,1,1,1,1,1,1,0,1,0],[0,1,0,0,0,1,0,0,2,0,1,0],
        [0,1,0,1,1,1,2,1,1,1,1,0],[0,2,0,1,0,0,1,0,0,0,1,0],[0,1,1,1,2,1,1,1,1,2,1,0],[0,0,0,0,0,0,0,0,0,0,0,0]]
-access=[(i,j) for i in range(1,11) for j in range(1,11) if Table[i][j]]
-gentask=[(i,j) for i in range(1,11) for j in range(1,11) if Table[i][j]==2]
-diff=[(1,0),(0,1),(-1,0),(0,-1)]
-Dist=lambda loc,tar: abs(loc[0]-tar[0])+abs(loc[1]-tar[1])
+access=[(i,j) for i in range(12) for j in range(12) if Table[i][j]]
+gentask=[(i,j) for i in range(12) for j in range(12) if Table[i][j]==2]
 
 def task_generate():
     start,end=random.choice(gentask),random.choice(gentask)
@@ -18,8 +15,8 @@ def task_generate():
     return (start,end)
 
 def update():
-    for i in range(1,11):
-        for j in range(1,11): Table2[i][j],Table_nex[i][j]=Table[i][j],Table[i][j]
+    for i in range(12):
+        for j in range(12): Table2[i][j],Table_nex[i][j]=Table[i][j],Table[i][j]
     for agent in Agents:
         agent.pushed,agent.wait,agent.pushing=False,False,None
         Table2[agent.loc[0]][agent.loc[1]]=agent.id+10
@@ -75,7 +72,7 @@ class Agent:
     def decide(self):
         M=0
         if self.pushed:
-            for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]):
+            for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]): #q値のmaxを使うのは怪しい
                 if Table_nex[pos[0]][pos[1]]<10 and self.pushing.loc!=pos:
                     if val>M: M,self.nex=val,pos
             if M==0:
@@ -87,9 +84,9 @@ class Agent:
                     agent.wait,agent.nex=True,agent.loc
                     Table_nex[agent.loc[0]][agent.loc[1]]=agent.id+10
         else:
-            for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]):
+            for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]): #q値のmaxを使うのは怪しい
                 if Table_nex[pos[0]][pos[1]]<10:
-                    if val>M: M,self.nex=val,pos #later
+                    if val>M: M,self.nex=val,pos #後で考える
             if M==0: self.wait,self.nex=True,self.loc
         
         if (not self.wait) and Table2[self.nex[0]][self.nex[1]]>=10:
@@ -107,21 +104,23 @@ class Agent:
             if self.state=="fetch": self.target,self.state=self.task[1],"deliver"
             else: self.select_task()
 
-##learn q_table###
+#q_learning
 connection,q_table={},{}
-for pos in access:
-    connection[pos]=[(pos[0]+diff[i][0],pos[1]+diff[i][1]) for i in range(4) if Table[pos[0]+diff[i][0]][pos[1]+diff[i][1]]]
+e,a,r,gamma=0.998,0.06,50,0.9
+diff=[(1,0),(0,1),(-1,0),(0,-1)]
+Dist=lambda loc,tar: abs(loc[0]-tar[0])+abs(loc[1]-tar[1])
+for pos in access: connection[pos]=[(pos[0]+diff[i][0],pos[1]+diff[i][1]) for i in range(4) if Table[pos[0]+diff[i][0]][pos[1]+diff[i][1]]]
 for target in gentask:
     tmp={}
     for key,val in connection.items(): tmp[key]=[19-Dist(pos,target) for pos in val]
     q_table[target]=tmp
 learn_agent=Agent(random.choice(gentask))
 learn_agent.select_task_random()
-for _ in range(120000):
+for _ in range(1000000):
     learn_agent.learn()
     e*=0.998
 
-##test##
+#test
 Agent.ID=0
 Agents=[Agent(loc) for loc in random.sample(gentask,Agent_Num)]
 Tasks=[task_generate() for _ in range(Task_Num)]
@@ -137,9 +136,3 @@ for step in range(Step):
         agent=Agents[ids.pop(0)]
         agent.decide()
     for agent in Agents: agent.move()
-
-    locate=[]
-    for agent in Agents:
-        if agent.state=="deliver": locate.append("1,"+str(agent.loc[0])+","+str(agent.loc[1])+".")
-        else: locate.append("0,"+str(agent.loc[0])+","+str(agent.loc[1])+".")
-    with open('./csvs/path'+str(step),'w') as file: file.writelines(locate)
