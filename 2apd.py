@@ -2,7 +2,7 @@ import random
 import copy
 
 Agent_Num,Task_Num=7,15
-Step=5000
+Step=50
 Table=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,2,1,1,1,0],[0,1,0,2,0,1,0,0,1,0,1,0],[0,2,0,1,0,1,0,0,1,0,1,0],
        [0,1,0,1,1,2,1,1,1,1,1,0],[0,1,1,1,0,0,0,1,0,0,2,0],[0,1,0,1,1,1,1,1,1,0,1,0],[0,1,0,0,0,1,0,0,2,0,1,0],
        [0,1,0,1,1,1,2,1,1,1,1,0],[0,2,0,1,0,0,1,0,0,0,1,0],[0,1,1,1,2,1,1,1,1,2,1,0],[0,0,0,0,0,0,0,0,0,0,0,0]]
@@ -45,12 +45,12 @@ class Agent:
         rnd=random.random()
         if rnd<e: index=random.randint(0,len(connection[self.loc])-1)
         else:
-            lis=q_table[self.target][self.loc]  
+            lis=list(q_table[self.target][self.loc].values())
             index=lis.index(max(lis))
         next_loc=connection[self.loc][index]
-        if next_loc==self.target: td=r-q_table[self.target][self.loc][index]
-        else: td=-1+gamma*(max(q_table[self.target][next_loc]))-q_table[self.target][self.loc][index]
-        q_table[self.target][self.loc][index]=q_table[self.target][self.loc][index]+a*td
+        if next_loc==self.target: td=r-q_table[self.target][self.loc][next_loc]
+        else: td=-1+gamma*(max(q_table[self.target][next_loc].values()))-q_table[self.target][self.loc][next_loc]
+        q_table[self.target][self.loc][next_loc]+=a*td
         self.loc=next_loc
         if self.loc==self.target:
             if self.state=="fetch": self.target,self.state=self.task[1],"deliver"
@@ -59,8 +59,11 @@ class Agent:
     def select_task(self):
         taskid,M=0,0
         for i,task in enumerate(Tasks):
-           Q=max(q_table[task[0]][self.loc])
-           if Q>M: M,taskid=Q,i
+            if task[0]==self.loc:
+                taskid=i
+                break
+            Q=q_table[task[0]][self.loc][0][1]
+            if Q>M: M,taskid=Q,i
         self.task=Tasks.pop(taskid)
         Tasks.append(task_generate())
         self.target,self.state=self.task[0],"fetch"
@@ -70,13 +73,13 @@ class Agent:
         self.priority=self.id #tentative
 
     def decide(self):
-        M=0
         if self.pushed:
-            for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]): #q値のmaxを使うのは怪しい
+            for pos,val in q_table[self.target][self.loc]: #q値のmaxを使うのは怪しい
                 if Table_nex[pos[0]][pos[1]]<10 and self.pushing.loc!=pos:
-                    if val>M: M,self.nex=val,pos
-            if M==0:
-                self.wait,self.nex=True,self.loc
+                    self.nex=pos
+                    break
+            if self.nex==self.loc:
+                self.wait=True
                 agent=self
                 while agent.pushed:
                     agent=agent.pushing
@@ -84,10 +87,11 @@ class Agent:
                     agent.wait,agent.nex=True,agent.loc
                     Table_nex[agent.loc[0]][agent.loc[1]]=agent.id+10
         else:
-            for pos,val in zip(connection[self.loc],q_table[self.target][self.loc]): #q値のmaxを使うのは怪しい
+            for pos,val in q_table[self.target][self.loc]: #q値のmaxを使うのは怪しい
                 if Table_nex[pos[0]][pos[1]]<10:
-                    if val>M: M,self.nex=val,pos #後で考える
-            if M==0: self.wait,self.nex=True,self.loc
+                    M,self.nex=val,pos #later
+                    break
+            if self.nex==self.loc: self.wait=True
         
         if (not self.wait) and Table2[self.nex[0]][self.nex[1]]>=10:
             agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
@@ -112,13 +116,17 @@ Dist=lambda loc,tar: abs(loc[0]-tar[0])+abs(loc[1]-tar[1])
 for pos in access: connection[pos]=[(pos[0]+diff[i][0],pos[1]+diff[i][1]) for i in range(4) if Table[pos[0]+diff[i][0]][pos[1]+diff[i][1]]]
 for target in gentask:
     tmp={}
-    for key,val in connection.items(): tmp[key]=[19-Dist(pos,target) for pos in val]
+    for key,val in connection.items(): tmp[key]={pos:19-Dist(pos,target) for pos in val}
     q_table[target]=tmp
 learn_agent=Agent(random.choice(gentask))
 learn_agent.select_task_random()
 for _ in range(1000000):
     learn_agent.learn()
     e*=0.998
+
+for pos in gentask:
+    dic=q_table[pos]
+    for key,val in dic.items(): dic[key]=sorted(val.items(),key=lambda x:x[1],reverse=True)
 
 #test
 Agent.ID=0
@@ -136,3 +144,9 @@ for step in range(Step):
         agent=Agents[ids.pop(0)]
         agent.decide()
     for agent in Agents: agent.move()
+
+    locate=[]
+    for agent in Agents:
+        if agent.state=="deliver": locate.append("1,"+str(agent.loc[0])+","+str(agent.loc[1])+".")
+        else: locate.append("0,"+str(agent.loc[0])+","+str(agent.loc[1])+".")
+    with open('./csvs/path'+str(step),'w') as file: file.writelines(locate)
