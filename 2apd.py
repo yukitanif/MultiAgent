@@ -19,6 +19,7 @@ def update():
         for j in range(12): Table2[i][j],Table_nex[i][j]=Table[i][j],Table[i][j]
     for agent in Agents:
         agent.pushed,agent.wait,agent.pushing=False,False,None
+        agent.limited,agent.go=False,None
         Table2[agent.loc[0]][agent.loc[1]]=agent.id+10
 
 class Agent:
@@ -35,6 +36,8 @@ class Agent:
         self.pushing=None
         self.pushed=False
         self.wait=False
+        self.limited=False
+        self.go=None
 
     def select_task_random(self):
         self.task=task_generate()
@@ -70,11 +73,17 @@ class Agent:
         if self.target==self.loc: self.target,self.state=self.task[1],"deliver" 
 
     def prior(self):
-        self.priority=self.id #tentative
+        self.priority=0
+        first=q_table[self.target][self.loc][0]
+        second=q_table[self.target][self.loc][1]
+        if first[1]>10 and first[1]>1.6*second[1]: #行動選択の余地が少ないので優先度高い
+            self.priority+=8
+            self.limited=True
+            self.go=first[0]
 
     def decide(self):
         if self.pushed:
-            for pos,val in q_table[self.target][self.loc]: #q値のmaxを使うのは怪しい
+            for pos,val in q_table[self.target][self.loc]:
                 if Table_nex[pos[0]][pos[1]]<10 and self.pushing.loc!=pos:
                     self.nex=pos
                     break
@@ -86,11 +95,15 @@ class Agent:
                     Table_nex[agent.nex[0]][agent.nex[1]]=Table[agent.nex[0]][agent.nex[1]]
                     agent.wait,agent.nex=True,agent.loc
                     Table_nex[agent.loc[0]][agent.loc[1]]=agent.id+10
-        else:
-            for pos,val in q_table[self.target][self.loc]: #q値のmaxを使うのは怪しい
-                if Table_nex[pos[0]][pos[1]]<10:
-                    M,self.nex=val,pos #later
-                    break
+        else: #自由なとき
+            if self.limited:
+                if Table_nex[self.go[0]][self.go[1]]<10: self.nex=self.go
+                else: pass #wait
+            else:
+                for pos,val in q_table[self.target][self.loc]:
+                    if Table_nex[pos[0]][pos[1]]<10:
+                        self.nex=pos #later
+                        break
             if self.nex==self.loc: self.wait=True
         
         #priority inheritance
@@ -109,7 +122,6 @@ class Agent:
             if self.state=="fetch": self.target,self.state=self.task[1],"deliver"
             else: self.select_task()
 
-#q_learning
 connection,q_table={},{}
 e,a,r,gamma=0.998,0.06,50,0.9
 diff=[(1,0),(0,1),(-1,0),(0,-1)]
@@ -127,8 +139,36 @@ for _ in range(1000000):
 for pos in gentask:
     dic=q_table[pos]
     for key,val in dic.items(): dic[key]=sorted(val.items(),key=lambda x:x[1],reverse=True)
+    visited=set()
+    loop=set()
+    for i in range(12):
+        for j in range(12):
+            now=(i,j)
+            if (not Table[i][j]) or (now in visited): continue
+            line=set()
+            while True:
+                line.add(now)
+                if now==pos or (now in visited):
+                    for k in line: visited.add(k)
+                    break
+                now=q_table[pos][now][0][0]
+                if now in line:
+                    for k in line: loop.add(k)
+                    break
+    while loop:
+        delete=set()
+        for k in loop:
+            adj=q_table[pos][k]
+            for i,loc in enumerate(adj):
+                if loc[0] in visited:
+                    tmp=adj[0]
+                    adj[0]=adj[i]
+                    adj[i]=tmp
+                    delete.add(k)
+                    visited.add(k)
+                    break
+        for d in delete: loop.remove(d)
 
-#test
 Agent.ID=0
 Agents=[Agent(loc) for loc in random.sample(gentask,Agent_Num)]
 Tasks=[task_generate() for _ in range(Task_Num)]
