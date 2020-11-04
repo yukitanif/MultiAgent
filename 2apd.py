@@ -1,7 +1,7 @@
 import random
 import copy
 
-Agent_Num,Task_Num=7,15
+Agent_Num,Task_Num=2,15
 Step=50
 Table=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,2,1,1,1,0],[0,1,0,2,0,1,0,0,1,0,1,0],[0,2,0,1,0,1,0,0,1,0,1,0],
        [0,1,0,1,1,2,1,1,1,1,1,0],[0,1,1,1,0,0,0,1,0,0,2,0],[0,1,0,1,1,1,1,1,1,0,1,0],[0,1,0,0,0,1,0,0,2,0,1,0],
@@ -72,12 +72,12 @@ class Agent:
         self.target,self.state=self.task[0],"fetch"
         if self.target==self.loc: self.target,self.state=self.task[1],"deliver" 
 
-    def prior(self):
-        self.priority=0
+    def prior(self): #prirityはNNで決める
+        self.priority=self.id/10
         first=q_table[self.target][self.loc][0]
         second=q_table[self.target][self.loc][1]
-        if first[1]>10 and first[1]>1.6*second[1]: #行動選択の余地が少ないので優先度高い
-            self.priority+=8
+        if first[1]>10 and first[1]>1.6*second[1]:
+            self.priority+=first[1]
             self.limited=True
             self.go=first[0]
 
@@ -95,18 +95,17 @@ class Agent:
                     Table_nex[agent.nex[0]][agent.nex[1]]=Table[agent.nex[0]][agent.nex[1]]
                     agent.wait,agent.nex=True,agent.loc
                     Table_nex[agent.loc[0]][agent.loc[1]]=agent.id+10
-        else: #自由なとき
+        else:
             if self.limited:
                 if Table_nex[self.go[0]][self.go[1]]<10: self.nex=self.go
-                else: pass #wait
+                else: pass
             else:
                 for pos,val in q_table[self.target][self.loc]:
                     if Table_nex[pos[0]][pos[1]]<10:
-                        self.nex=pos #later
+                        self.nex=pos
                         break
             if self.nex==self.loc: self.wait=True
         
-        #priority inheritance
         if (not self.wait) and Table2[self.nex[0]][self.nex[1]]>=10:
             agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
             if agent.priority<self.priority:
