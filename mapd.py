@@ -1,8 +1,8 @@
 import random
 import copy
 
-Agent_Num,Task_Num=2,15
-Step=50
+Agent_Num,Task_Num=5,15
+Step=50000
 Table=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,2,1,1,1,0],[0,1,0,2,0,1,0,0,1,0,1,0],[0,2,0,1,0,1,0,0,1,0,1,0],
        [0,1,0,1,1,2,1,1,1,1,1,0],[0,1,1,1,0,0,0,1,0,0,2,0],[0,1,0,1,1,1,1,1,1,0,1,0],[0,1,0,0,0,1,0,0,2,0,1,0],
        [0,1,0,1,1,1,2,1,1,1,1,0],[0,2,0,1,0,0,1,0,0,0,1,0],[0,1,1,1,2,1,1,1,1,2,1,0],[0,0,0,0,0,0,0,0,0,0,0,0]]
@@ -83,7 +83,8 @@ class Agent:
 
     def prior(self):
         self.priority=self.id/10
-                 
+        #NN
+
     def decide(self):
         if self.pushed: #priorityの高いagentから押されている時
             for pos,val in q_table[self.target][self.loc]: #避けられる対象の場所の中から
@@ -91,6 +92,11 @@ class Agent:
                     self.nex=pos
                     break
             if self.nex==self.loc: #上の条件に該当する場所が無いなら
+                for pos,val in q_table[self.target][self.loc]: #避けられる対象の場所の中から
+                    if Table_nex[pos[0]][pos[1]]<10 and pos!=self.pushing.loc: #その場所を既に予約しているagentがいない
+                        self.nex=pos
+                        break
+            if self.nex==self.loc: #else
                 self.wait=True #待つしかない
                 agent=self
                 while agent.pushed:
@@ -103,8 +109,8 @@ class Agent:
             if Table_nex[first[0]][first[1]]<10: self.nex=first #行きたい場所が空いてるなら行くしかない
             else:
                 for pos,val in q_table[self.target][self.loc]:
-                    if pos==self.target: break #その場所がtargetだった時、その場所で待つので確定。
-                    elif q_table[self.target][pos][0][0]!=self.loc: #行ったら別の道からtargetへ行けそうな時は、そっちの道から移動
+                    if pos==self.target: break #その場所がtargetだった時、その場所で待つで確定。
+                    elif q_table[self.target][pos][0][0]!=self.loc and Table_nex[pos[0]][pos[1]]<10: #行ったら別の道からtargetへ行けそうな時は、そっちの道から移動
                         self.nex=pos
                         break
             if self.nex==self.loc: self.wait=True
@@ -125,7 +131,7 @@ class Agent:
             else: self.select_task()
 
 connection,q_table={},{}
-e,a,r,gamma=0.998,0.06,50,0.95
+e,a,r,gamma=0.998,0.06,50,0.93
 diff=[(1,0),(0,1),(-1,0),(0,-1)]
 Dist=lambda loc,tar: abs(loc[0]-tar[0])+abs(loc[1]-tar[1])
 for pos in access: connection[pos]=[(pos[0]+diff[i][0],pos[1]+diff[i][1]) for i in range(4) if Table[pos[0]+diff[i][0]][pos[1]+diff[i][1]]]
