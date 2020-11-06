@@ -76,21 +76,28 @@ class Agent:
             
     def reserve(self):
         tmp=self.loc
-        for i in range(3): #3step分のマスを予定する
+        for i in range(3): #3step分のマスを予定(≠予約)する
             self.path.append(tmp)
-            tmp=q_table[self.target][tmp][0][0]
             if tmp==self.target: break
+            tmp=q_table[self.target][tmp][0][0]
 
     def prior(self):
         self.priority=self.id/10
-        #NN
-
+        """for pos in connection[self.loc]:
+            if Table2[pos[0]][pos[1]]>=10: #接触しているエージェントがいるなら
+                self.priority+=1000
+                break
+        for pos in connection[self.loc]: #周りの空きマスが大きいと優先度低くする
+            if Table[pos[0]][pos[1]]: self.priority-=100
+        self.priority+=q_table[self.target][self.loc][0][1]"""
+                         
     def decide(self):
         if self.pushed: #priorityの高いagentから押されている時
             for pos,val in q_table[self.target][self.loc]: #避けられる対象の場所の中から
-                if Table_nex[pos[0]][pos[1]]<10 and (pos not in self.pushing.path): #その場所を既に予約しているagentがいなく、押しているagentのいる場所と行きたい場所以外
-                    self.nex=pos
-                    break
+                if Table_nex[pos[0]][pos[1]]<10: #その場所を既に予約しているagentがいなく、押しているagentのいる場所と行きたい場所以外
+                    if pos not in self.pushing.path or self.pushing.path[-1]==self.path[1]:
+                        self.nex=pos
+                        break
             if self.nex==self.loc: #上の条件に該当する場所が無いなら
                 for pos,val in q_table[self.target][self.loc]: #避けられる対象の場所の中から
                     if Table_nex[pos[0]][pos[1]]<10 and pos!=self.pushing.loc: #その場所を既に予約しているagentがいない
@@ -129,7 +136,7 @@ class Agent:
         if self.loc==self.target:
             if self.state=="fetch": self.target,self.state=self.task[1],"deliver"
             else: self.select_task()
-
+            
 connection,q_table={},{}
 e,a,r,gamma=0.998,0.06,50,0.93
 diff=[(1,0),(0,1),(-1,0),(0,-1)]
