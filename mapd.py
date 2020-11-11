@@ -1,13 +1,14 @@
 import random
 import copy
 
-Agent_Num,Task_Num=5,15
+Agent_Num,Task_Num=6,15
 Step=50000
 Table=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,2,1,1,1,0],[0,1,0,2,0,1,0,0,1,0,1,0],[0,2,0,1,0,1,0,0,1,0,1,0],
        [0,1,0,1,1,2,1,1,1,1,1,0],[0,1,1,1,0,0,0,1,0,0,2,0],[0,1,0,1,1,1,1,1,1,0,1,0],[0,1,0,0,0,1,0,0,2,0,1,0],
        [0,1,0,1,1,1,2,1,1,1,1,0],[0,2,0,1,0,0,1,0,0,0,1,0],[0,1,1,1,2,1,1,1,1,2,1,0],[0,0,0,0,0,0,0,0,0,0,0,0]]
-access=[(i,j) for i in range(12) for j in range(12) if Table[i][j]]
-gentask=[(i,j) for i in range(12) for j in range(12) if Table[i][j]==2]
+H,W=len(Table),len(Table[0])
+access=[(i,j) for i in range(H) for j in range(W) if Table[i][j]]
+gentask=[(i,j) for i in range(H) for j in range(W) if Table[i][j]==2]
 
 def task_generate():
     start,end=random.choice(gentask),random.choice(gentask)
@@ -15,8 +16,8 @@ def task_generate():
     return (start,end)
 
 def update():
-    for i in range(12):
-        for j in range(12):
+    for i in range(H):
+        for j in range(W):
             Table2[i][j]=Table[i][j]
             Table_nex[i][j]=Table[i][j]
     for agent in Agents:
@@ -35,12 +36,14 @@ class Agent:
         self.target=None
         self.task=None
         self.state="fetch"
-        self.nex=None
+        self.nex=self.loc
         self.priority=0
         self.pushing=None
         self.pushed=False
         self.wait=False
         self.path=[]
+        #temporary
+        self.execute=0
 
     def select_task_random(self):
         self.task=task_generate()
@@ -54,7 +57,7 @@ class Agent:
             index=lis.index(max(lis))
         next_loc=connection[self.loc][index]
         if next_loc==self.target: td=r-q_table[self.target][self.loc][next_loc]
-        else: td=-1+gamma*(max(q_table[self.target][next_loc].values()))-q_table[self.target][self.loc][next_loc]
+        else: td=gamma*(max(q_table[self.target][next_loc].values()))-q_table[self.target][self.loc][next_loc]
         q_table[self.target][self.loc][next_loc]+=a*td
         self.loc=next_loc
         if self.loc==self.target:
@@ -62,6 +65,7 @@ class Agent:
             else: self.select_task_random()
 
     def select_task(self):
+        self.execute+=1
         taskid,M=0,0
         for i,task in enumerate(Tasks):
             if task[0]==self.loc:
@@ -82,20 +86,13 @@ class Agent:
             tmp=q_table[self.target][tmp][0][0]
 
     def prior(self):
-        self.priority=self.id/10
-        """for pos in connection[self.loc]:
-            if Table2[pos[0]][pos[1]]>=10: #接触しているエージェントがいるなら
-                self.priority+=1000
-                break
-        for pos in connection[self.loc]: #周りの空きマスが大きいと優先度低くする
-            if Table[pos[0]][pos[1]]: self.priority-=100
-        self.priority+=q_table[self.target][self.loc][0][1]"""
+        self.priority=q_table[self.target][self.loc][0][1]
                          
     def decide(self):
         if self.pushed: #priorityの高いagentから押されている時
             for pos,val in q_table[self.target][self.loc]: #避けられる対象の場所の中から
                 if Table_nex[pos[0]][pos[1]]<10: #その場所を既に予約しているagentがいなく、押しているagentのいる場所と行きたい場所以外
-                    if pos not in self.pushing.path or self.pushing.path[-1]==self.path[1]:
+                    if pos not in self.pushing.path or self.pushing.path[-1]==pos:
                         self.nex=pos
                         break
             if self.nex==self.loc: #上の条件に該当する場所が無いなら
@@ -124,10 +121,11 @@ class Agent:
         
         if (not self.wait) and Table2[self.nex[0]][self.nex[1]]>=10:
             agent=Agents[Table2[self.nex[0]][self.nex[1]]-10]
-            if agent.priority<self.priority:
+            if agent.priority<=self.priority:
                 agent.pushing,agent.pushed,agent.priority=self,True,self.priority
-                ids.remove(agent.id)
-                ids.insert(0,agent.id)
+                if agent.id in ids:
+                    ids.remove(agent.id)
+                    ids.insert(0,agent.id)
 
         Table_nex[self.nex[0]][self.nex[1]]=self.id+10
 
@@ -135,57 +133,29 @@ class Agent:
         self.loc=self.nex
         if self.loc==self.target:
             if self.state=="fetch": self.target,self.state=self.task[1],"deliver"
-            else: self.select_task()
-            
+            else: self.select_task()  
+
 connection,q_table={},{}
-e,a,r,gamma=0.998,0.06,50,0.93
+e,a,r,gamma=1,0.06,70,0.97
+init=30
 diff=[(1,0),(0,1),(-1,0),(0,-1)]
 Dist=lambda loc,tar: abs(loc[0]-tar[0])+abs(loc[1]-tar[1])
 for pos in access: connection[pos]=[(pos[0]+diff[i][0],pos[1]+diff[i][1]) for i in range(4) if Table[pos[0]+diff[i][0]][pos[1]+diff[i][1]]]
 for target in gentask:
     tmp={}
-    for key,val in connection.items(): tmp[key]={pos:19-Dist(pos,target) for pos in val}
+    for key,val in connection.items(): tmp[key]={pos:init-Dist(pos,target) for pos in val}
     q_table[target]=tmp
 learn_agent=Agent(random.choice(gentask))
 learn_agent.select_task_random()
-for _ in range(500000):
+for _ in range(150000):
     learn_agent.learn()
-    e*=0.998
+    e*=0.99999
 for pos in gentask:
     dic=q_table[pos]
     for key,val in dic.items(): dic[key]=sorted(val.items(),key=lambda x:x[1],reverse=True)
-    visited=set()
-    loop=set()
-    for i in range(12):
-        for j in range(12):
-            now=(i,j)
-            if (not Table[i][j]) or (now in visited): continue
-            line=set()
-            while True:
-                line.add(now)
-                if now==pos or (now in visited):
-                    for k in line: visited.add(k)
-                    break
-                now=q_table[pos][now][0][0]
-                if now in line:
-                    for k in line: loop.add(k)
-                    break
-    while loop:
-        delete=set()
-        for k in loop:
-            adj=q_table[pos][k]
-            for i,loc in enumerate(adj):
-                if loc[0] in visited:
-                    tmp=adj[0]
-                    adj[0]=adj[i]
-                    adj[i]=tmp
-                    delete.add(k)
-                    visited.add(k)
-                    break
-        for d in delete: loop.remove(d)
 
 Agent.ID=0
-Agents=[Agent(loc) for loc in random.sample(gentask,Agent_Num)]
+Agents=[Agent(loc) for loc in random.sample(access,Agent_Num)]
 Tasks=[task_generate() for _ in range(Task_Num)]
 Table2=copy.deepcopy(Table)
 Table_nex=copy.deepcopy(Table)
