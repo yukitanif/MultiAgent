@@ -105,7 +105,6 @@ class Agent:
                 agent=self
                 while agent.pushed:
                     agent=agent.pushing
-                    Table_nex[agent.nex[0]][agent.nex[1]]=Table[agent.nex[0]][agent.nex[1]]
                     agent.wait,agent.nex=True,agent.loc
                     Table_nex[agent.loc[0]][agent.loc[1]]=agent.id+10
         else: #押されていないときは、基本的に一番q-valueが高い所へ移動する。移動できないなら他の場所に移動したいが、結局今いるところに戻ってくるなら待つのがbest.  
